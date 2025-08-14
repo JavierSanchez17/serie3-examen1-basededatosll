@@ -61,14 +61,16 @@
             <!-- Panel de controles -->
             <div class="controls-panel">
                 <h3>Controles de Transacción</h3>
-                <div class="form-group">
-                    <label for="isolation-level">Nivel de Aislamiento:</label>
-                    <select id="isolation-level" name="isolation-level">
-                        <option value="READ UNCOMMITTED">READ UNCOMMITTED</option>
-                        <option value="READ COMMITTED" selected>READ COMMITTED</option>
-                        <option value="REPEATABLE READ">REPEATABLE READ</option>
-                        <option value="SERIALIZABLE">SERIALIZABLE</option>
-                    </select>
+                <div class="isolation-selector">
+                    <div class="form-group">
+                        <label for="isolation-level">Nivel de Aislamiento:</label>
+                        <select id="isolation-level" name="isolation-level" class="isolation-select">
+                            <option value="READ UNCOMMITTED">READ UNCOMMITTED</option>
+                            <option value="READ COMMITTED" selected>READ COMMITTED</option>
+                            <option value="REPEATABLE READ">REPEATABLE READ</option>
+                            <option value="SERIALIZABLE">SERIALIZABLE</option>
+                        </select>
+                    </div>
                 </div>
                 <div class="button-grid">
                     <button id="btn-start" class="btn btn-primary">
