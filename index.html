@@ -21,7 +21,7 @@
                 </div>
             </div>
 
-            <!-- Formulario de datos -->
+            <!-- Formulario de Insert -->
             <div class="form-panel">
                 <h3>Insertar Persona</h3>
                 <form id="dataForm">
@@ -33,9 +33,43 @@
                 </form>
             </div>
 
+            <!-- Formulario de Update/Delete -->
+            <div class="form-panel">
+                <h3>Actualizar / Eliminar Persona</h3>
+                <form id="updateDeleteForm">
+                    <div class="form-group">
+                        <label for="update-id">ID de la Persona:</label>
+                        <input type="number" id="update-id" name="update-id" required placeholder="Ingrese el ID">
+                    </div>
+                    <div class="form-group">
+                        <label for="update-nombre">Nuevo Nombre (solo para actualizar):</label>
+                        <input type="text" id="update-nombre" name="update-nombre" placeholder="Ingrese nuevo nombre">
+                    </div>
+                </form>
+                <div class="button-grid">
+                    <button id="btn-update" class="btn btn-secondary" disabled>
+                        <span class="btn-icon">✏️</span>
+                        Actualizar
+                    </button>
+                    <button id="btn-delete" class="btn btn-danger" disabled>
+                        <span class="btn-icon">🗑️</span>
+                        Eliminar
+                    </button>
+                </div>
+            </div>
+
             <!-- Panel de controles -->
             <div class="controls-panel">
                 <h3>Controles de Transacción</h3>
+                <div class="form-group">
+                    <label for="isolation-level">Nivel de Aislamiento:</label>
+                    <select id="isolation-level" name="isolation-level">
+                        <option value="READ UNCOMMITTED">READ UNCOMMITTED</option>
+                        <option value="READ COMMITTED" selected>READ COMMITTED</option>
+                        <option value="REPEATABLE READ">REPEATABLE READ</option>
+                        <option value="SERIALIZABLE">SERIALIZABLE</option>
+                    </select>
+                </div>
                 <div class="button-grid">
                     <button id="btn-start" class="btn btn-primary">
                         <span class="btn-icon">▶️</span>
@@ -66,6 +100,8 @@
                     <p class="log-item info">Sistema iniciado. Listo para comenzar transacciones.</p>
                 </div>
             </div>
+
+            <!-- Panel de datos -->
             <div class="data-panel">
                 <h3>Personas en la Base de Datos</h3>
                 <div class="table-container">
@@ -100,6 +136,9 @@
         const btnCommit = document.getElementById('btn-commit');
         const btnRollback = document.getElementById('btn-rollback');
         const btnRefresh = document.getElementById('btn-refresh');
+        const btnUpdate = document.getElementById('btn-update');
+        const btnDelete = document.getElementById('btn-delete');
+
         const transactionStatus = document.getElementById('transaction-status');
         const activityLog = document.getElementById('activity-log');
         const tableBody = document.getElementById('table-body');
@@ -111,116 +150,125 @@
         btnCommit.addEventListener('click', commitTransaction);
         btnRollback.addEventListener('click', rollbackTransaction);
         btnRefresh.addEventListener('click', loadData);
+        btnUpdate.addEventListener('click', updateData);
+        btnDelete.addEventListener('click', deleteData);
 
         // Inicializar datos al cargar la página
-        window.onload = function() {
-            loadData();
-        };
+        window.onload = loadData;
 
-        // Función para iniciar transacción
+        // Iniciar transacción
         async function startTransaction() {
+            const isolationLevel = document.getElementById('isolation-level').value;
             try {
                 const response = await fetch('/api', {
                     method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/x-www-form-urlencoded',
-                    },
-                    body: 'action=start_transaction'
+                    headers: {'Content-Type': 'application/x-www-form-urlencoded'},
+                    body: `action=start_transaction&isolation_level=${encodeURIComponent(isolationLevel)}`
                 });
-
                 const result = await response.json();
-                
                 if (result.success) {
                     transactionActive = true;
                     currentTransactionId = result.transaction_id;
                     insertedInTransaction = [];
-                    updateTransactionStatus('active', 'Transacción Activa');
+                    updateTransactionStatus('active', `Transacción Activa (${isolationLevel})`);
                     updateButtons();
-                    addLogEntry('Transacción iniciada correctamente', 'success');
-                } else {
-                    addLogEntry('Error al iniciar transacción: ' + result.message, 'error');
-                }
-            } catch (error) {
-                addLogEntry('Error de conexión: ' + error.message, 'error');
-            }
+                    addLogEntry(`Transacción iniciada con nivel de aislamiento: ${isolationLevel}`, 'success');
+                } else { addLogEntry('Error al iniciar transacción: ' + result.message, 'error'); }
+            } catch (error) { addLogEntry('Error de conexión: ' + error.message, 'error'); }
         }
 
-        // Función para insertar datos
+        // Insert
         async function insertData() {
             const nombre = document.getElementById('nombre').value.trim();
-
-            if (!nombre) {
-                addLogEntry('Por favor ingrese un nombre', 'warning');
-                return;
-            }
+            if (!nombre) { addLogEntry('Por favor ingrese un nombre', 'warning'); return; }
 
             try {
                 const response = await fetch('/api', {
                     method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/x-www-form-urlencoded',
-                    },
+                    headers: {'Content-Type': 'application/x-www-form-urlencoded'},
                     body: `action=insert_data&nombre=${encodeURIComponent(nombre)}`
                 });
-
                 const result = await response.json();
-                
                 if (result.success) {
                     insertedInTransaction.push({nombre: nombre, id: result.inserted_id});
                     addLogEntry(`Nombre "${nombre}" guardado (ID: ${result.inserted_id}) - Pendiente de confirmación`, 'info');
                     dataForm.reset();
-                } else {
-                    addLogEntry('Error al guardar nombre: ' + result.message, 'error');
-                }
-            } catch (error) {
-                addLogEntry('Error de conexión: ' + error.message, 'error');
-            }
+                } else { addLogEntry('Error al guardar nombre: ' + result.message, 'error'); }
+            } catch (error) { addLogEntry('Error de conexión: ' + error.message, 'error'); }
         }
 
-        // Función para confirmar transacción
+        // Update
+        async function updateData() {
+            const id = document.getElementById('update-id').value.trim();
+            const nombre = document.getElementById('update-nombre').value.trim();
+            if (!id || !nombre) { addLogEntry('Ingrese ID y nuevo nombre para actualizar', 'warning'); return; }
+
+            try {
+                const response = await fetch('/api', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/x-www-form-urlencoded'},
+                    body: `action=update_data&id=${encodeURIComponent(id)}&nombre=${encodeURIComponent(nombre)}`
+                });
+                const result = await response.json();
+                if (result.success) {
+                    insertedInTransaction.push({id, nombre, action: 'update'});
+                    addLogEntry(`Registro ID ${id} actualizado a "${nombre}" - Pendiente de confirmación`, 'info');
+                    document.getElementById('updateDeleteForm').reset();
+                } else { addLogEntry('Error al actualizar: ' + result.message, 'error'); }
+            } catch (error) { addLogEntry('Error de conexión: ' + error.message, 'error'); }
+        }
+
+        // Delete
+        async function deleteData() {
+            const id = document.getElementById('update-id').value.trim();
+            if (!id) { addLogEntry('Ingrese ID para eliminar', 'warning'); return; }
+
+            try {
+                const response = await fetch('/api', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/x-www-form-urlencoded'},
+                    body: `action=delete_data&id=${encodeURIComponent(id)}`
+                });
+                const result = await response.json();
+                if (result.success) {
+                    insertedInTransaction.push({id, action: 'delete'});
+                    addLogEntry(`Registro ID ${id} eliminado - Pendiente de confirmación`, 'info');
+                    document.getElementById('updateDeleteForm').reset();
+                } else { addLogEntry('Error al eliminar: ' + result.message, 'error'); }
+            } catch (error) { addLogEntry('Error de conexión: ' + error.message, 'error'); }
+        }
+
+        // Commit
         async function commitTransaction() {
             try {
                 const response = await fetch('/api', {
                     method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/x-www-form-urlencoded',
-                    },
+                    headers: {'Content-Type': 'application/x-www-form-urlencoded'},
                     body: 'action=commit_transaction'
                 });
-
                 const result = await response.json();
-                
                 if (result.success) {
                     transactionActive = false;
                     currentTransactionId = null;
                     updateTransactionStatus('committed', 'Transacción Confirmada');
                     updateButtons();
-                    addLogEntry(`Transacción confirmada. ${insertedInTransaction.length} persona(s) guardada(s)`, 'success');
-                    loadData(); // Recargar datos
-                    setTimeout(() => {
-                        updateTransactionStatus('inactive', 'Transacción Inactiva');
-                    }, 3000);
-                } else {
-                    addLogEntry('Error al confirmar transacción: ' + result.message, 'error');
-                }
-            } catch (error) {
-                addLogEntry('Error de conexión: ' + error.message, 'error');
-            }
+                    addLogEntry(`Transacción confirmada. ${insertedInTransaction.length} operación(es) ejecutada(s)`, 'success');
+                    insertedInTransaction = [];
+                    loadData();
+                    setTimeout(() => { updateTransactionStatus('inactive', 'Transacción Inactiva'); }, 3000);
+                } else { addLogEntry('Error al confirmar transacción: ' + result.message, 'error'); }
+            } catch (error) { addLogEntry('Error de conexión: ' + error.message, 'error'); }
         }
 
-        // Función para hacer rollback
+        // Rollback
         async function rollbackTransaction() {
             try {
                 const response = await fetch('/api', {
                     method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/x-www-form-urlencoded',
-                    },
+                    headers: {'Content-Type': 'application/x-www-form-urlencoded'},
                     body: 'action=rollback_transaction'
                 });
-
                 const result = await response.json();
-                
                 if (result.success) {
                     transactionActive = false;
                     currentTransactionId = null;
@@ -228,92 +276,60 @@
                     updateButtons();
                     addLogEntry(`Rollback realizado. ${insertedInTransaction.length} operación(es) cancelada(s)`, 'warning');
                     insertedInTransaction = [];
-                    setTimeout(() => {
-                        updateTransactionStatus('inactive', 'Transacción Inactiva');
-                    }, 3000);
-                } else {
-                    addLogEntry('Error al hacer rollback: ' + result.message, 'error');
-                }
-            } catch (error) {
-                addLogEntry('Error de conexión: ' + error.message, 'error');
-            }
+                    setTimeout(() => { updateTransactionStatus('inactive', 'Transacción Inactiva'); }, 3000);
+                } else { addLogEntry('Error al hacer rollback: ' + result.message, 'error'); }
+            } catch (error) { addLogEntry('Error de conexión: ' + error.message, 'error'); }
         }
 
+        // Cargar datos
         async function loadData() {
             try {
-                console.log('Intentando cargar datos...');
                 const response = await fetch('/api?action=get_data');
-                
-                // Verificar si la respuesta es JSON
-                const contentType = response.headers.get('content-type');
-                if (!contentType || !contentType.includes('application/json')) {
-                    const text = await response.text();
-                    console.error('Respuesta no es JSON:', text);
-                    addLogEntry('Error: El servidor no devolvió JSON válido', 'error');
-                    return;
-                }
-                
                 const result = await response.json();
-                console.log('Respuesta recibida:', result);
-                
                 if (result.success) {
-                    const formattedData = result.data.map(row => ({
-                        id: row[0],
-                        nombre: row[1]
-                    }));
+                    const formattedData = result.data.map(row => ({ id: row[0], nombre: row[1] }));
                     displayData(formattedData);
-                } else {
-                    addLogEntry('Error al cargar datos: ' + result.message, 'error');
-                }
-            } catch (error) {
-                console.error('Error completo:', error);
-                addLogEntry('Error de conexión: ' + error.message, 'error');
-            }
+                } else { addLogEntry('Error al cargar datos: ' + result.message, 'error'); }
+            } catch (error) { addLogEntry('Error de conexión: ' + error.message, 'error'); }
         }
-        // Función para mostrar datos en la tabla
+
+        // Mostrar datos en tabla
         function displayData(data) {
             tableBody.innerHTML = '';
-            
             if (data.length === 0) {
                 tableBody.innerHTML = '<tr><td colspan="2" class="no-data">No hay personas registradas</td></tr>';
                 return;
             }
-
             data.forEach(row => {
                 const tr = document.createElement('tr');
-                tr.innerHTML = `
-                    <td>${row.id}</td>
-                    <td>${row.nombre}</td>
-                `;
+                tr.innerHTML = `<td>${row.id}</td><td>${row.nombre}</td>`;
                 tableBody.appendChild(tr);
             });
         }
 
-        // Función para actualizar el estado de la transacción
+        // Estado de transacción
         function updateTransactionStatus(status, text) {
             transactionStatus.className = `status-${status}`;
             transactionStatus.querySelector('.status-text').textContent = text;
         }
 
-        // Función para actualizar el estado de los botones
+        // Botones según estado
         function updateButtons() {
             btnStart.disabled = transactionActive;
             btnInsert.disabled = !transactionActive;
             btnCommit.disabled = !transactionActive;
             btnRollback.disabled = !transactionActive;
+            btnUpdate.disabled = !transactionActive;
+            btnDelete.disabled = !transactionActive;
         }
 
-        // Función para agregar entradas al log
+        // Log
         function addLogEntry(message, type) {
             const logEntry = document.createElement('p');
             logEntry.className = `log-item ${type}`;
             logEntry.innerHTML = `<span class="timestamp">${new Date().toLocaleTimeString()}</span> ${message}`;
             activityLog.insertBefore(logEntry, activityLog.firstChild);
-            
-            // Mantener solo los últimos 10 mensajes
-            while (activityLog.children.length > 10) {
-                activityLog.removeChild(activityLog.lastChild);
-            }
+            while (activityLog.children.length > 10) activityLog.removeChild(activityLog.lastChild);
         }
     </script>
 </body>
