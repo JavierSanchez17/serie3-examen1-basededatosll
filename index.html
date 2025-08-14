@@ -3,14 +3,13 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Manejo de Transacciones - Demo Persona</title>
+    <title>Manejo de Transacciones</title>
     <link rel="stylesheet" href="/styles.css">
 </head>
 <body>
     <div class="container">
         <header>
-            <h1>Sistema de Manejo de Transacciones</h1>
-            <p>Demo con tabla Persona - Base de datos: transacciones_demo</p>
+            <h1>Transacciones</h1>
         </header>
 
         <div class="main-content">
@@ -20,12 +19,9 @@
                 <div id="transaction-status" class="status-inactive">
                     <span class="status-text">Transacción Inactiva</span>
                 </div>
-                <div id="current-isolation-display" class="current-isolation">
-                    Nivel actual: <span id="current-isolation-text">REPEATABLE READ</span>
-                </div>
             </div>
 
-            <!-- Formulario de datos -->
+            <!-- Formulario de Insert -->
             <div class="form-panel">
                 <h3>Insertar Persona</h3>
                 <form id="dataForm">
@@ -37,69 +33,63 @@
                 </form>
             </div>
 
+            <!-- Formulario de Update/Delete -->
+            <div class="form-panel">
+                <h3>Actualizar / Eliminar Persona</h3>
+                <form id="updateDeleteForm">
+                    <div class="form-group">
+                        <label for="update-id">ID de la Persona:</label>
+                        <input type="number" id="update-id" name="update-id" required placeholder="Ingrese el ID">
+                    </div>
+                    <div class="form-group">
+                        <label for="update-nombre">Nuevo Nombre (solo para actualizar):</label>
+                        <input type="text" id="update-nombre" name="update-nombre" placeholder="Ingrese nuevo nombre">
+                    </div>
+                </form>
+                <div class="button-grid">
+                    <button id="btn-update" class="btn btn-secondary" disabled>
+                        <span class="btn-icon">✏️</span>
+                        Actualizar
+                    </button>
+                    <button id="btn-delete" class="btn btn-danger" disabled>
+                        <span class="btn-icon">🗑️</span>
+                        Eliminar
+                    </button>
+                </div>
+            </div>
+
             <!-- Panel de controles -->
             <div class="controls-panel">
                 <h3>Controles de Transacción</h3>
+                <div class="form-group">
+                    <label for="isolation-level">Nivel de Aislamiento:</label>
+                    <select id="isolation-level" name="isolation-level">
+                        <option value="READ UNCOMMITTED">READ UNCOMMITTED</option>
+                        <option value="READ COMMITTED" selected>READ COMMITTED</option>
+                        <option value="REPEATABLE READ">REPEATABLE READ</option>
+                        <option value="SERIALIZABLE">SERIALIZABLE</option>
+                    </select>
+                </div>
                 <div class="button-grid">
                     <button id="btn-start" class="btn btn-primary">
                         <span class="btn-icon">▶️</span>
                         Iniciar Transacción
                     </button>
-
+                    
                     <button id="btn-insert" class="btn btn-secondary" disabled>
                         <span class="btn-icon">➕</span>
                         Guardar Nombre
                     </button>
-
+                    
                     <button id="btn-commit" class="btn btn-success" disabled>
                         <span class="btn-icon">✅</span>
                         Confirmar (Commit)
                     </button>
-
+                    
                     <button id="btn-rollback" class="btn btn-danger" disabled>
                         <span class="btn-icon">↩️</span>
                         Cancelar (Rollback)
                     </button>
-                </div>
-
-                <div class="isolation-controls">
-                    <h3>Nivel de Aislamiento</h3>
-                    <div class="isolation-selector">
-                        <select id="isolation-level" class="form-control">
-                            <option value="READ UNCOMMITTED">READ UNCOMMITTED</option>
-                            <option value="READ COMMITTED">READ COMMITTED</option>
-                            <option value="REPEATABLE READ" selected>REPEATABLE READ</option>
-                            <option value="SERIALIZABLE">SERIALIZABLE</option>
-                        </select>
-                    </div>
-                    <div class="isolation-buttons">
-                        <button id="btn-set-isolation" class="btn btn-primary">
-                            <span class="btn-icon">⚙️</span>
-                            Establecer
-                        </button>
-                        <button id="btn-get-isolation" class="btn btn-outline">
-                            <span class="btn-icon">🔍</span>
-                            Ver Actual
-                        </button>
-                    </div>
-                </div>
-
-                <div class="test-panel">
-                    <h3>Probar Problemas de Lectura</h3>
-                    <div class="button-grid">
-                        <button id="btn-dirty-read" class="btn btn-warning">
-                            <span class="btn-icon">👀</span>
-                            Lectura Sucia
-                        </button>
-                        <button id="btn-non-repeatable" class="btn btn-warning">
-                            <span class="btn-icon">🔄</span>
-                            No Repetible
-                        </button>
-                        <button id="btn-phantom-read" class="btn btn-warning">
-                            <span class="btn-icon">👻</span>
-                            Lectura Fantasma
-                        </button>
-                    </div>
                 </div>
             </div>
 
@@ -111,6 +101,7 @@
                 </div>
             </div>
 
+            <!-- Panel de datos -->
             <div class="data-panel">
                 <h3>Personas en la Base de Datos</h3>
                 <div class="table-container">
@@ -145,14 +136,10 @@
         const btnCommit = document.getElementById('btn-commit');
         const btnRollback = document.getElementById('btn-rollback');
         const btnRefresh = document.getElementById('btn-refresh');
-        const btnSetIsolation = document.getElementById('btn-set-isolation');
-        const btnGetIsolation = document.getElementById('btn-get-isolation');
-        const btnDirtyRead = document.getElementById('btn-dirty-read');
-        const btnNonRepeatable = document.getElementById('btn-non-repeatable');
-        const btnPhantomRead = document.getElementById('btn-phantom-read');
-        const isolationLevelSelect = document.getElementById('isolation-level');
+        const btnUpdate = document.getElementById('btn-update');
+        const btnDelete = document.getElementById('btn-delete');
+
         const transactionStatus = document.getElementById('transaction-status');
-        const currentIsolationText = document.getElementById('current-isolation-text');
         const activityLog = document.getElementById('activity-log');
         const tableBody = document.getElementById('table-body');
         const dataForm = document.getElementById('dataForm');
@@ -163,434 +150,186 @@
         btnCommit.addEventListener('click', commitTransaction);
         btnRollback.addEventListener('click', rollbackTransaction);
         btnRefresh.addEventListener('click', loadData);
-        btnSetIsolation.addEventListener('click', setIsolationLevel);
-        btnGetIsolation.addEventListener('click', getIsolationLevel);
-        btnDirtyRead.addEventListener('click', testDirtyRead);
-        btnNonRepeatable.addEventListener('click', testNonRepeatableRead);
-        btnPhantomRead.addEventListener('click', testPhantomRead);
+        btnUpdate.addEventListener('click', updateData);
+        btnDelete.addEventListener('click', deleteData);
 
         // Inicializar datos al cargar la página
-        window.onload = function() {
-            loadData();
-            getIsolationLevel();
-        };
+        window.onload = loadData;
 
-        // Función para mostrar modal personalizado
-        function showModal(title, fields, callback) {
-            const modal = document.createElement('div');
-            modal.className = 'custom-modal';
-
-            let fieldsHtml = '';
-            fields.forEach(field => {
-                fieldsHtml += `
-                    <div class="form-group">
-                        <label for="modal-${field.id}">${field.label}</label>
-                        <input type="${field.type || 'text'}" id="modal-${field.id}" class="form-control" placeholder="${field.placeholder || ''}">
-                    </div>
-                `;
-            });
-
-            modal.innerHTML = `
-                <div class="modal-content">
-                    <h3>${title}</h3>
-                    ${fieldsHtml}
-                    <div class="modal-buttons">
-                        <button id="modal-cancel" class="btn btn-outline">Cancelar</button>
-                        <button id="modal-accept" class="btn btn-primary">Aceptar</button>
-                    </div>
-                </div>
-            `;
-
-            document.body.appendChild(modal);
-
-            // Esperar a que el usuario interactúe
-            document.getElementById('modal-cancel').addEventListener('click', () => {
-                modal.remove();
-            });
-
-            document.getElementById('modal-accept').addEventListener('click', () => {
-                const values = {};
-                fields.forEach(field => {
-                    values[field.id] = document.getElementById(`modal-${field.id}`).value;
-                });
-                modal.remove();
-                callback(values);
-            });
-        }
-
-        // Función para mostrar notificación tipo toast
-        function showToast(message, type) {
-            const toast = document.createElement('div');
-            toast.className = `toast-notification toast-${type}`;
-            toast.innerHTML = `
-                <span class="toast-icon">${type === 'success' ? '✅' : type === 'warning' ? '⚠️' : '❌'}</span>
-                <span class="toast-message">${message}</span>
-            `;
-            document.body.appendChild(toast);
-
-            setTimeout(() => {
-                toast.classList.add('fade-out');
-                setTimeout(() => toast.remove(), 500);
-            }, 3000);
-        }
-
-        // Función para iniciar transacción
+        // Iniciar transacción
         async function startTransaction() {
+            const isolationLevel = document.getElementById('isolation-level').value;
             try {
                 const response = await fetch('/api', {
                     method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/x-www-form-urlencoded',
-                    },
-                    body: 'action=start_transaction'
+                    headers: {'Content-Type': 'application/x-www-form-urlencoded'},
+                    body: `action=start_transaction&isolation_level=${encodeURIComponent(isolationLevel)}`
                 });
-
                 const result = await response.json();
-
                 if (result.success) {
                     transactionActive = true;
                     currentTransactionId = result.transaction_id;
                     insertedInTransaction = [];
-                    updateTransactionStatus('active', 'Transacción Activa');
+                    updateTransactionStatus('active', `Transacción Activa (${isolationLevel})`);
                     updateButtons();
-                    showToast('Transacción iniciada correctamente', 'success');
-                    addLogEntry('Transacción iniciada', 'success');
-                } else {
-                    showToast('Error al iniciar transacción: ' + result.message, 'error');
-                    addLogEntry('Error al iniciar transacción: ' + result.message, 'error');
-                }
-            } catch (error) {
-                showToast('Error de conexión: ' + error.message, 'error');
-                addLogEntry('Error de conexión: ' + error.message, 'error');
-            }
+                    addLogEntry(`Transacción iniciada con nivel de aislamiento: ${isolationLevel}`, 'success');
+                } else { addLogEntry('Error al iniciar transacción: ' + result.message, 'error'); }
+            } catch (error) { addLogEntry('Error de conexión: ' + error.message, 'error'); }
         }
 
-        // Función para insertar datos
+        // Insert
         async function insertData() {
             const nombre = document.getElementById('nombre').value.trim();
-
-            if (!nombre) {
-                showToast('Por favor ingrese un nombre', 'warning');
-                return;
-            }
+            if (!nombre) { addLogEntry('Por favor ingrese un nombre', 'warning'); return; }
 
             try {
                 const response = await fetch('/api', {
                     method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/x-www-form-urlencoded',
-                    },
+                    headers: {'Content-Type': 'application/x-www-form-urlencoded'},
                     body: `action=insert_data&nombre=${encodeURIComponent(nombre)}`
                 });
-
                 const result = await response.json();
-
                 if (result.success) {
                     insertedInTransaction.push({nombre: nombre, id: result.inserted_id});
-                    showToast(`Nombre "${nombre}" guardado (ID: ${result.inserted_id}) - Pendiente de confirmación`, 'info');
-                    addLogEntry(`Dato insertado (pendiente de commit): ${nombre} (ID: ${result.inserted_id})`, 'info');
+                    addLogEntry(`Nombre "${nombre}" guardado (ID: ${result.inserted_id}) - Pendiente de confirmación`, 'info');
                     dataForm.reset();
-                } else {
-                    showToast('Error al guardar nombre: ' + result.message, 'error');
-                    addLogEntry('Error al insertar: ' + result.message, 'error');
-                }
-            } catch (error) {
-                showToast('Error de conexión: ' + error.message, 'error');
-                addLogEntry('Error de conexión: ' + error.message, 'error');
-            }
+                } else { addLogEntry('Error al guardar nombre: ' + result.message, 'error'); }
+            } catch (error) { addLogEntry('Error de conexión: ' + error.message, 'error'); }
         }
 
-        // Función para confirmar transacción
+        // Update
+        async function updateData() {
+            const id = document.getElementById('update-id').value.trim();
+            const nombre = document.getElementById('update-nombre').value.trim();
+            if (!id || !nombre) { addLogEntry('Ingrese ID y nuevo nombre para actualizar', 'warning'); return; }
+
+            try {
+                const response = await fetch('/api', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/x-www-form-urlencoded'},
+                    body: `action=update_data&id=${encodeURIComponent(id)}&nombre=${encodeURIComponent(nombre)}`
+                });
+                const result = await response.json();
+                if (result.success) {
+                    insertedInTransaction.push({id, nombre, action: 'update'});
+                    addLogEntry(`Registro ID ${id} actualizado a "${nombre}" - Pendiente de confirmación`, 'info');
+                    document.getElementById('updateDeleteForm').reset();
+                } else { addLogEntry('Error al actualizar: ' + result.message, 'error'); }
+            } catch (error) { addLogEntry('Error de conexión: ' + error.message, 'error'); }
+        }
+
+        // Delete
+        async function deleteData() {
+            const id = document.getElementById('update-id').value.trim();
+            if (!id) { addLogEntry('Ingrese ID para eliminar', 'warning'); return; }
+
+            try {
+                const response = await fetch('/api', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/x-www-form-urlencoded'},
+                    body: `action=delete_data&id=${encodeURIComponent(id)}`
+                });
+                const result = await response.json();
+                if (result.success) {
+                    insertedInTransaction.push({id, action: 'delete'});
+                    addLogEntry(`Registro ID ${id} eliminado - Pendiente de confirmación`, 'info');
+                    document.getElementById('updateDeleteForm').reset();
+                } else { addLogEntry('Error al eliminar: ' + result.message, 'error'); }
+            } catch (error) { addLogEntry('Error de conexión: ' + error.message, 'error'); }
+        }
+
+        // Commit
         async function commitTransaction() {
             try {
                 const response = await fetch('/api', {
                     method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/x-www-form-urlencoded',
-                    },
+                    headers: {'Content-Type': 'application/x-www-form-urlencoded'},
                     body: 'action=commit_transaction'
                 });
-
                 const result = await response.json();
-
                 if (result.success) {
                     transactionActive = false;
                     currentTransactionId = null;
                     updateTransactionStatus('committed', 'Transacción Confirmada');
                     updateButtons();
-                    showToast(`Transacción confirmada. ${insertedInTransaction.length} persona(s) guardada(s)`, 'success');
-                    addLogEntry(`Transacción confirmada. ${insertedInTransaction.length} operaciones guardadas`, 'success');
+                    addLogEntry(`Transacción confirmada. ${insertedInTransaction.length} operación(es) ejecutada(s)`, 'success');
+                    insertedInTransaction = [];
                     loadData();
-                    setTimeout(() => {
-                        updateTransactionStatus('inactive', 'Transacción Inactiva');
-                    }, 3000);
-                } else {
-                    showToast('Error al confirmar transacción: ' + result.message, 'error');
-                    addLogEntry('Error al confirmar: ' + result.message, 'error');
-                }
-            } catch (error) {
-                showToast('Error de conexión: ' + error.message, 'error');
-                addLogEntry('Error de conexión: ' + error.message, 'error');
-            }
+                    setTimeout(() => { updateTransactionStatus('inactive', 'Transacción Inactiva'); }, 3000);
+                } else { addLogEntry('Error al confirmar transacción: ' + result.message, 'error'); }
+            } catch (error) { addLogEntry('Error de conexión: ' + error.message, 'error'); }
         }
 
-        // Función para hacer rollback
+        // Rollback
         async function rollbackTransaction() {
             try {
                 const response = await fetch('/api', {
                     method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/x-www-form-urlencoded',
-                    },
+                    headers: {'Content-Type': 'application/x-www-form-urlencoded'},
                     body: 'action=rollback_transaction'
                 });
-
                 const result = await response.json();
-
                 if (result.success) {
                     transactionActive = false;
                     currentTransactionId = null;
                     updateTransactionStatus('rolled-back', 'Transacción Cancelada');
                     updateButtons();
-                    showToast(`Rollback realizado. ${insertedInTransaction.length} operación(es) cancelada(s)`, 'warning');
-                    addLogEntry(`Transacción cancelada. ${insertedInTransaction.length} operaciones revertidas`, 'warning');
+                    addLogEntry(`Rollback realizado. ${insertedInTransaction.length} operación(es) cancelada(s)`, 'warning');
                     insertedInTransaction = [];
-                    setTimeout(() => {
-                        updateTransactionStatus('inactive', 'Transacción Inactiva');
-                    }, 3000);
-                } else {
-                    showToast('Error al hacer rollback: ' + result.message, 'error');
-                    addLogEntry('Error en rollback: ' + result.message, 'error');
-                }
-            } catch (error) {
-                showToast('Error de conexión: ' + error.message, 'error');
-                addLogEntry('Error de conexión: ' + error.message, 'error');
-            }
+                    setTimeout(() => { updateTransactionStatus('inactive', 'Transacción Inactiva'); }, 3000);
+                } else { addLogEntry('Error al hacer rollback: ' + result.message, 'error'); }
+            } catch (error) { addLogEntry('Error de conexión: ' + error.message, 'error'); }
         }
 
+        // Cargar datos
         async function loadData() {
             try {
                 const response = await fetch('/api?action=get_data');
                 const result = await response.json();
-
                 if (result.success) {
-                    const formattedData = result.data.map(row => ({
-                        id: row[0],
-                        nombre: row[1]
-                    }));
+                    const formattedData = result.data.map(row => ({ id: row[0], nombre: row[1] }));
                     displayData(formattedData);
-                    addLogEntry('Datos actualizados', 'info');
-                } else {
-                    showToast('Error al cargar datos: ' + result.message, 'error');
-                    addLogEntry('Error al cargar datos: ' + result.message, 'error');
-                }
-            } catch (error) {
-                showToast('Error de conexión: ' + error.message, 'error');
-                addLogEntry('Error de conexión: ' + error.message, 'error');
-            }
+                } else { addLogEntry('Error al cargar datos: ' + result.message, 'error'); }
+            } catch (error) { addLogEntry('Error de conexión: ' + error.message, 'error'); }
         }
 
-        // Función para mostrar datos en la tabla
+        // Mostrar datos en tabla
         function displayData(data) {
             tableBody.innerHTML = '';
-
             if (data.length === 0) {
                 tableBody.innerHTML = '<tr><td colspan="2" class="no-data">No hay personas registradas</td></tr>';
                 return;
             }
-
             data.forEach(row => {
                 const tr = document.createElement('tr');
-                tr.innerHTML = `
-                    <td>${row.id}</td>
-                    <td>${row.nombre}</td>
-                `;
+                tr.innerHTML = `<td>${row.id}</td><td>${row.nombre}</td>`;
                 tableBody.appendChild(tr);
             });
         }
 
-        // Función para establecer nivel de aislamiento
-        async function setIsolationLevel() {
-            const level = isolationLevelSelect.value;
-
-            try {
-                const response = await fetch('/api', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/x-www-form-urlencoded',
-                    },
-                    body: `action=set_isolation&level=${encodeURIComponent(level)}`
-                });
-
-                const result = await response.json();
-
-                if (result.success) {
-                    currentIsolationText.textContent = level;
-                    showToast(`Nivel de aislamiento establecido a: ${level}`, 'success');
-                    addLogEntry(`Nivel de aislamiento cambiado a: ${level}`, 'info');
-                } else {
-                    showToast('Error al establecer nivel: ' + result.message, 'error');
-                    addLogEntry('Error al cambiar nivel: ' + result.message, 'error');
-                }
-            } catch (error) {
-                showToast('Error de conexión: ' + error.message, 'error');
-                addLogEntry('Error de conexión: ' + error.message, 'error');
-            }
-        }
-
-        // Función para obtener nivel actual
-        async function getIsolationLevel() {
-            try {
-                const response = await fetch('/api?action=get_isolation');
-                const result = await response.json();
-
-                if (result.success) {
-                    currentIsolationText.textContent = result.current_level;
-                    isolationLevelSelect.value = result.current_level;
-                    showToast(`Nivel de aislamiento actual: ${result.current_level}`, 'info');
-                } else {
-                    showToast('Error al obtener nivel: ' + result.message, 'error');
-                }
-            } catch (error) {
-                showToast('Error de conexión: ' + error.message, 'error');
-            }
-        }
-
-        // Función para probar lectura sucia
-        async function testDirtyRead() {
-            showModal('Probar Lectura Sucia', [
-                {
-                    id: 'dirty-read-id',
-                    label: 'ID a leer:',
-                    type: 'number',
-                    placeholder: 'Ingrese el ID'
-                }
-            ], async (values) => {
-                if (!values['dirty-read-id']) {
-                    showToast('Debe ingresar un ID válido', 'error');
-                    return;
-                }
-
-                try {
-                    const response = await fetch(`/api?action=test_dirty_read&id=${values['dirty-read-id']}`);
-                    const result = await response.json();
-
-                    if (result.success) {
-                        const message = result.is_dirty
-                            ? `🔴 LECTURA SUCIA: Valor leído "${result.data || 'null'}" (Datos no confirmados)`
-                            : `🟢 DATOS CONFIRMADOS: Valor "${result.data || 'null'}"`;
-
-                        showToast(message, result.is_dirty ? 'warning' : 'success');
-
-                        // Mostrar detalles en el log
-                        addLogEntry(message, result.is_dirty ? 'warning' : 'success');
-                        if (result.is_dirty) {
-                            addLogEntry(`Valor real confirmado: "${result.confirmed_data || 'null'}"`, 'info');
-                        }
-                    } else {
-                        showToast('Error en prueba: ' + result.message, 'error');
-                        addLogEntry('Error en prueba lectura sucia: ' + result.message, 'error');
-                    }
-                } catch (error) {
-                    showToast('Error de conexión: ' + error.message, 'error');
-                    addLogEntry('Error de conexión: ' + error.message, 'error');
-                }
-            });
-        }
-
-        // Función para probar lectura no repetible
-        async function testNonRepeatableRead() {
-            showModal('Probar Lectura No Repetible', [
-                {
-                    id: 'non-repeatable-id',
-                    label: 'ID a leer:',
-                    type: 'number',
-                    placeholder: 'Ingrese el ID'
-                }
-            ], async (values) => {
-                if (!values['non-repeatable-id']) {
-                    showToast('Debe ingresar un ID válido', 'error');
-                    return;
-                }
-
-                try {
-                    const response = await fetch(`/api?action=test_non_repeatable_read&id=${values['non-repeatable-id']}`);
-                    const result = await response.json();
-
-                    if (result.success) {
-                        const message = result.is_different
-                            ? `🔄 LECTURA NO REPETIBLE: Valores diferentes "${result.first_read || 'null'}" → "${result.second_read || 'null'}"`
-                            : `✅ LECTURAS CONSISTENTES: Valor "${result.first_read || 'null'}"`;
-
-                        showToast(message, result.is_different ? 'warning' : 'success');
-                        addLogEntry(message, result.is_different ? 'warning' : 'success');
-                    } else {
-                        showToast('Error en prueba: ' + result.message, 'error');
-                        addLogEntry('Error en prueba no repetible: ' + result.message, 'error');
-                    }
-                } catch (error) {
-                    showToast('Error de conexión: ' + error.message, 'error');
-                    addLogEntry('Error de conexión: ' + error.message, 'error');
-                }
-            });
-        }
-
-        // Función para probar lectura fantasma
-        async function testPhantomRead() {
-            showModal('Probar Lectura Fantasma', [
-                {
-                    id: 'phantom-filter',
-                    label: 'Filtro para nombres:',
-                    placeholder: 'Ej. "a" para buscar nombres con "a"'
-                }
-            ], async (values) => {
-                try {
-                    const response = await fetch(`/api?action=test_phantom_read&filter=${encodeURIComponent(values['phantom-filter'] || '')}`);
-                    const result = await response.json();
-
-                    if (result.success) {
-                        const message = result.has_phantoms
-                            ? `👻 LECTURA FANTASMA: Conteo cambiado ${result.first_count} → ${result.second_count}`
-                            : `✅ SIN FANTASMAS: Conteo constante ${result.first_count}`;
-
-                        showToast(message, result.has_phantoms ? 'warning' : 'success');
-                        addLogEntry(message, result.has_phantoms ? 'warning' : 'success');
-                    } else {
-                        showToast('Error en prueba: ' + result.message, 'error');
-                        addLogEntry('Error en prueba fantasma: ' + result.message, 'error');
-                    }
-                } catch (error) {
-                    showToast('Error de conexión: ' + error.message, 'error');
-                    addLogEntry('Error de conexión: ' + error.message, 'error');
-                }
-            });
-        }
-
-        // Función para actualizar el estado de la transacción
+        // Estado de transacción
         function updateTransactionStatus(status, text) {
             transactionStatus.className = `status-${status}`;
             transactionStatus.querySelector('.status-text').textContent = text;
         }
 
-        // Función para actualizar el estado de los botones
+        // Botones según estado
         function updateButtons() {
             btnStart.disabled = transactionActive;
             btnInsert.disabled = !transactionActive;
             btnCommit.disabled = !transactionActive;
             btnRollback.disabled = !transactionActive;
+            btnUpdate.disabled = !transactionActive;
+            btnDelete.disabled = !transactionActive;
         }
 
-        // Función para agregar entradas al log
+        // Log
         function addLogEntry(message, type) {
             const logEntry = document.createElement('p');
             logEntry.className = `log-item ${type}`;
             logEntry.innerHTML = `<span class="timestamp">${new Date().toLocaleTimeString()}</span> ${message}`;
             activityLog.insertBefore(logEntry, activityLog.firstChild);
-
-            // Mantener solo los últimos 20 mensajes
-            while (activityLog.children.length > 20) {
-                activityLog.removeChild(activityLog.lastChild);
-            }
+            while (activityLog.children.length > 10) activityLog.removeChild(activityLog.lastChild);
         }
     </script>
 </body>

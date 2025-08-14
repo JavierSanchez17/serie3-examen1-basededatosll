@@ -4,8 +4,6 @@ body {
     min-height: 100vh;
     color: #333;
     line-height: 1.6;
-    margin: 0;
-    padding: 0;
 }
 
 .container {
@@ -46,12 +44,12 @@ header p {
 .controls-panel,
 .results-panel,
 .data-panel {
-    background: white;
+    background: rgb(0, 0, 0);
     border-radius: 15px;
     padding: 25px;
     box-shadow: 0 10px 30px rgba(0,0,0,0.1);
     backdrop-filter: blur(10px);
-    border: 1px solid rgba(255,255,255,0.2);
+    border: 1px solid rgba(0, 0, 0, 0.2);
 }
 
 .status-panel {
@@ -71,7 +69,7 @@ header p {
 .data-panel h3 {
     font-size: 1.4em;
     margin-bottom: 20px;
-    color: #4a5568;
+    color: #ffffff;
     border-bottom: 2px solid #e2e8f0;
     padding-bottom: 10px;
 }
@@ -84,7 +82,6 @@ header p {
     font-size: 1.1em;
     display: inline-block;
     transition: all 0.3s ease;
-    margin-bottom: 15px;
 }
 
 .status-inactive {
@@ -108,17 +105,6 @@ header p {
     color: white;
 }
 
-.current-isolation {
-    margin-top: 15px;
-    padding: 10px 20px;
-    background: #f7fafc;
-    border-radius: 25px;
-    font-weight: 600;
-    color: #4a5568;
-    display: inline-block;
-    box-shadow: 0 2px 5px rgba(0,0,0,0.1);
-}
-
 @keyframes pulse {
     0% { transform: scale(1); }
     50% { transform: scale(1.05); }
@@ -134,12 +120,11 @@ header p {
     display: block;
     margin-bottom: 8px;
     font-weight: 600;
-    color: #4a5568;
+    color: #ffffff;
 }
 
 .form-group input,
-.form-group textarea,
-.form-group select {
+.form-group textarea {
     width: 100%;
     padding: 12px 15px;
     border: 2px solid #e2e8f0;
@@ -150,8 +135,7 @@ header p {
 }
 
 .form-group input:focus,
-.form-group textarea:focus,
-.form-group select:focus {
+.form-group textarea:focus {
     outline: none;
     border-color: #4299e1;
     background: white;
@@ -162,13 +146,6 @@ header p {
 .form-group textarea {
     height: 80px;
     resize: vertical;
-}
-
-.form-help {
-    display: block;
-    margin-top: 5px;
-    font-size: 0.85em;
-    color: #718096;
 }
 
 /* Botones */
@@ -233,149 +210,15 @@ header p {
     color: white;
 }
 
-.btn-warning {
-    background: linear-gradient(45deg, #ed8936, #dd6b20);
-    color: white;
-}
-
 .btn-outline {
     background: white;
     color: #4a5568;
     border: 2px solid #e2e8f0;
+    margin-top: 15px;
 }
 
 .btn-outline:hover:not(:disabled) {
     background: #f7fafc;
-}
-
-/* Controles de aislamiento */
-.isolation-controls {
-    background: #f7fafc;
-    padding: 20px;
-    border-radius: 15px;
-    margin-top: 20px;
-    box-shadow: inset 0 2px 5px rgba(0,0,0,0.05);
-}
-
-.isolation-controls h3 {
-    margin-top: 0;
-    font-size: 1.2em;
-    color: #4a5568;
-    border-bottom: none;
-    padding-bottom: 0;
-}
-
-.isolation-selector {
-    display: flex;
-    gap: 10px;
-    margin: 15px 0;
-}
-
-.isolation-selector select {
-    flex-grow: 1;
-    padding: 12px 15px;
-    border: 2px solid #e2e8f0;
-    border-radius: 10px;
-    background: white;
-    font-size: 1em;
-}
-
-.isolation-buttons {
-    display: flex;
-    gap: 10px;
-}
-
-/* Panel de pruebas */
-.test-panel {
-    margin-top: 20px;
-    padding-top: 20px;
-    border-top: 1px solid #e2e8f0;
-}
-
-.test-panel h3 {
-    font-size: 1.2em;
-    color: #4a5568;
-    border-bottom: none;
-    padding-bottom: 0;
-    margin-bottom: 15px;
-}
-
-/* Modal personalizado */
-.custom-modal {
-    position: fixed;
-    top: 0;
-    left: 0;
-    width: 100%;
-    height: 100%;
-    background: rgba(0,0,0,0.7);
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    z-index: 1000;
-    animation: fadeIn 0.3s ease;
-}
-
-.modal-content {
-    background: white;
-    padding: 25px;
-    border-radius: 15px;
-    width: 90%;
-    max-width: 400px;
-    box-shadow: 0 10px 30px rgba(0,0,0,0.2);
-    animation: slideUp 0.3s ease;
-}
-
-.modal-content h3 {
-    margin-top: 0;
-    color: #4a5568;
-    border-bottom: 2px solid #e2e8f0;
-    padding-bottom: 10px;
-}
-
-.modal-buttons {
-    display: flex;
-    justify-content: flex-end;
-    gap: 10px;
-    margin-top: 20px;
-}
-
-/* Notificaciones Toast */
-.toast-notification {
-    position: fixed;
-    bottom: 30px;
-    left: 50%;
-    transform: translateX(-50%);
-    padding: 15px 25px;
-    border-radius: 8px;
-    color: white;
-    font-weight: 600;
-    box-shadow: 0 5px 15px rgba(0,0,0,0.2);
-    z-index: 1001;
-    animation: slideUp 0.3s ease;
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    max-width: 90%;
-}
-
-.toast-icon {
-    font-size: 1.2em;
-}
-
-.toast-success {
-    background: linear-gradient(45deg, #48bb78, #38a169);
-}
-
-.toast-warning {
-    background: linear-gradient(45deg, #ed8936, #dd6b20);
-}
-
-.toast-error {
-    background: linear-gradient(45deg, #f56565, #e53e3e);
-}
-
-.fade-out {
-    animation: fadeOut 0.5s ease forwards;
 }
 
 /* Log de actividades */
@@ -385,16 +228,15 @@ header p {
     border: 1px solid #e2e8f0;
     border-radius: 10px;
     padding: 15px;
-    background: #f7fafc;
+    background: #000000;
 }
 
 .log-item {
-    padding: 12px 15px;
-    margin-bottom: 10px;
-    border-radius: 8px;
+    padding: 8px 12px;
+    margin-bottom: 8px;
+    border-radius: 6px;
     border-left: 4px solid;
     animation: slideIn 0.3s ease;
-    font-size: 0.95em;
 }
 
 @keyframes slideIn {
@@ -434,9 +276,8 @@ header p {
 
 .timestamp {
     font-weight: bold;
-    font-size: 0.85em;
+    font-size: 0.9em;
     opacity: 0.8;
-    margin-right: 8px;
 }
 
 /* Tabla */
@@ -515,64 +356,29 @@ table tbody tr:nth-child(even) {
     background: #a8a8a8;
 }
 
-/* Animaciones */
-@keyframes fadeIn {
-    from { opacity: 0; }
-    to { opacity: 1; }
-}
-
-@keyframes fadeOut {
-    from { opacity: 1; }
-    to { opacity: 0; }
-}
-
-@keyframes slideUp {
-    from {
-        opacity: 0;
-        transform: translateX(-50%) translateY(20px);
-    }
-    to {
-        opacity: 1;
-        transform: translateX(-50%) translateY(0);
-    }
-}
-
 /* Responsive */
 @media (max-width: 768px) {
     .main-content {
         grid-template-columns: 1fr;
     }
-
+    
     .button-grid {
         grid-template-columns: 1fr;
     }
-
+    
     header h1 {
         font-size: 2em;
     }
-
+    
     .container {
         padding: 10px;
     }
-
+    
     .status-panel,
     .form-panel,
     .controls-panel,
     .results-panel,
     .data-panel {
-        padding: 20px;
-    }
-
-    .isolation-controls {
-        padding: 15px;
-    }
-
-    .isolation-buttons {
-        flex-direction: column;
-    }
-
-    .modal-content {
-        width: 95%;
         padding: 20px;
     }
 }

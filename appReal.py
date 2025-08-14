@@ -10,19 +10,11 @@ app.secret_key = secrets.token_hex(16)
 
 # Configuración de la base de datos
 DB_CONFIG = {
-    "host": "localhost",
+    "host": "127.0.0.1",
     "user": "root",
     "password": "Ramoncito12.",
     "database": "transacciones_demo",
     "autocommit": False
-}
-
-# Niveles de aislamiento
-ISOLATION_LEVELS = {
-    'READ UNCOMMITTED': 'READ UNCOMMITTED',
-    'READ COMMITTED': 'READ COMMITTED',
-    'REPEATABLE READ': 'REPEATABLE READ',
-    'SERIALIZABLE': 'SERIALIZABLE'
 }
 
 # Diccionario global para mantener conexiones por sesión
@@ -31,38 +23,31 @@ connections_lock = threading.Lock()
 
 
 def get_db_connection(isolation_level=None):
-    """Crea y retorna una nueva conexión a la base de datos"""
     try:
         connection = mysql.connector.connect(**DB_CONFIG)
         if isolation_level:
             cursor = connection.cursor()
             cursor.execute(f"SET SESSION TRANSACTION ISOLATION LEVEL {isolation_level}")
             cursor.close()
-            connection.commit()
         return connection
     except Error as e:
         print(f"Error al conectar a la base de datos: {e}")
         return None
 
 
-def get_session_connection():
-    """Obtiene o crea una conexión específica para esta sesión"""
+def get_session_connection(isolation_level=None):
     if 'session_id' not in session:
         session['session_id'] = secrets.token_hex(8)
         session.permanent = True
 
     session_id = session['session_id']
-    isolation_level = session.get('isolation_level', 'REPEATABLE READ')
 
     with connections_lock:
         if session_id not in connections:
             conn = get_db_connection(isolation_level)
             if conn:
-                connections[session_id] = {
-                    'connection': conn,
-                    'last_used': time.time()
-                }
-                print(f"[DEBUG] Nueva conexión creada para sesión: {session_id} con nivel {isolation_level}")
+                connections[session_id] = {'connection': conn, 'last_used': time.time()}
+                print(f"[DEBUG] Nueva conexión creada para sesión: {session_id}")
             else:
                 return None
         else:
@@ -72,17 +57,14 @@ def get_session_connection():
 
 
 def close_session_connection():
-    """Cierra la conexión de la sesión actual"""
     if 'session_id' not in session:
         return
 
     session_id = session['session_id']
-
     with connections_lock:
         if session_id in connections:
             conn_info = connections[session_id]
             conn = conn_info['connection']
-
             if conn and conn.is_connected():
                 try:
                     if conn.in_transaction:
@@ -92,21 +74,17 @@ def close_session_connection():
                     print(f"[DEBUG] Conexión cerrada para sesión: {session_id}")
                 except:
                     pass
-
             del connections[session_id]
 
 
 def cleanup_old_connections():
-    """Limpia conexiones antiguas (llamar periódicamente)"""
     current_time = time.time()
-    timeout = 300
-
+    timeout = 300  # 5 minutos
     with connections_lock:
         expired_sessions = []
         for session_id, conn_info in connections.items():
             if current_time - conn_info['last_used'] > timeout:
                 expired_sessions.append(session_id)
-
         for session_id in expired_sessions:
             conn_info = connections[session_id]
             conn = conn_info['connection']
@@ -133,8 +111,6 @@ def servir_css():
 
 @app.route("/api", methods=["POST", "GET", "OPTIONS"])
 def api():
-    print(f"[DEBUG] API llamada - Método: {request.method}, Acción: {request.values.get('action')}")
-
     if request.method == "OPTIONS":
         return '', 200
 
@@ -144,324 +120,227 @@ def api():
     action = request.values.get("action")
 
     try:
+        # --- Iniciar transacción ---
         if action == "start_transaction":
             close_session_connection()
+            isolation_level = request.values.get("isolation-level", "").upper()
+            valid_levels = ["READ UNCOMMITTED", "READ COMMITTED", "REPEATABLE READ", "SERIALIZABLE"]
+            if isolation_level not in valid_levels:
+                isolation_level = "SERIALIZABLE"  # Por defecto SERIALIZABLE
 
-            connection = get_session_connection()
+            connection = get_session_connection(isolation_level)
             if not connection:
                 return jsonify({"success": False, "message": "No se pudo conectar a la base de datos"})
 
             try:
+                # Iniciar transacción
                 connection.start_transaction()
+                print(
+                    f"[DEBUG] Transacción iniciada con nivel {isolation_level} para sesión: {session.get('session_id')}")
+
+                # Para SERIALIZABLE, obtener un bloqueo inicial en la tabla
+                if isolation_level == "SERIALIZABLE":
+                    cursor = connection.cursor()
+                    # Obtener un bloqueo compartido en toda la tabla para detectar conflictos
+                    cursor.execute("SELECT COUNT(*) FROM persona LOCK IN SHARE MODE")
+                    count = cursor.fetchone()[0]
+                    cursor.fetchall()  # Consumir todos los resultados
+                    cursor.close()
+                    print(f"[DEBUG] Bloqueo inicial obtenido en tabla persona (registros: {count})")
+
                 session['transaction_active'] = True
                 session['inserted_count'] = 0
+                session['pending_rows'] = []
+                session['isolation_level'] = isolation_level
                 session.modified = True
-
-                print(f"[DEBUG] TRANSACCIÓN REAL iniciada en MySQL para sesión: {session.get('session_id')}")
 
                 return jsonify({
                     "success": True,
-                    "message": "Transacción REAL iniciada en MySQL.",
                     "transaction_id": session.get('session_id'),
-                    "type": "REAL_MYSQL_TRANSACTION",
-                    "isolation_level": session.get('isolation_level', 'REPEATABLE READ')
+                    "isolation_level": session['isolation_level']
                 })
-
             except Error as e:
-                print(f"[DEBUG] Error al iniciar transacción: {e}")
-                return jsonify({"success": False, "message": f"Error al iniciar transacción: {str(e)}"})
+                print(f"[DEBUG] Error al iniciar transacción: {str(e)}")
+                return jsonify({"success": False, "message": str(e)})
 
+        # --- Insertar datos ---
         elif action == "insert_data":
             if not session.get('transaction_active', False):
-                return jsonify(
-                    {"success": False, "message": "No hay transacción activa. Inicia una transacción primero."})
+                return jsonify({"success": False, "message": "No hay transacción activa"})
 
             nombre = request.values.get("nombre", "").strip()
             if not nombre:
                 return jsonify({"success": False, "message": "El campo nombre es obligatorio"})
 
             connection = get_session_connection()
-            if not connection or not connection.is_connected():
-                return jsonify({"success": False, "message": "Conexión perdida. Reinicia la transacción."})
-
-            if not connection.in_transaction:
-                return jsonify(
-                    {"success": False, "message": "No hay transacción activa en la conexión. Reinicia la transacción."})
+            cursor = connection.cursor()
 
             try:
-                cursor = connection.cursor()
+                # Para SERIALIZABLE, bloquear toda la tabla para escritura
+                if session.get('isolation_level') == "SERIALIZABLE":
+                    print(f"[DEBUG] Intentando obtener bloqueo exclusivo para inserción...")
+                    # Bloqueo exclusivo en la tabla completa
+                    cursor.execute("SELECT * FROM persona FOR UPDATE")
+                    cursor.fetchall()  # Consumir todos los resultados
+                    print(f"[DEBUG] Bloqueo exclusivo obtenido para inserción")
 
-                query = "INSERT INTO persona (nombre) VALUES (%s)"
-                cursor.execute(query, (nombre,))
+                # Realizar la inserción
+                cursor.execute("INSERT INTO persona (nombre) VALUES (%s)", (nombre,))
                 inserted_id = cursor.lastrowid
-
-                cursor.execute("SELECT nombre FROM persona WHERE id = %s", (inserted_id,))
-                result = cursor.fetchone()
-
-                session['inserted_count'] = session.get('inserted_count', 0) + 1
-                session.modified = True
-
                 cursor.close()
 
-                print(f"[DEBUG] INSERTADO en MySQL: '{nombre}' (ID: {inserted_id}) - PENDIENTE DE COMMIT")
+                print(f"[DEBUG] Registro insertado con ID: {inserted_id}, Nombre: {nombre}")
 
-                return jsonify({
-                    "success": True,
-                    "message": f"'{nombre}' INSERTADO en la base de datos MySQL (ID: {inserted_id})",
-                    "inserted_id": inserted_id,
-                    "total_pending": session.get('inserted_count', 0),
-                    "status": "INSERTED_NOT_COMMITTED"
-                })
+                # Guardamos en la lista de pendientes
+                session['pending_rows'].append({'id': inserted_id, 'nombre': nombre, 'action': 'INSERT'})
+                session['inserted_count'] += 1
+                session.modified = True
+
+                return jsonify({"success": True, "inserted_id": inserted_id, "pending": session['pending_rows']})
 
             except Error as e:
-                print(f"[DEBUG] Error al insertar: {e}")
-                return jsonify({"success": False, "message": f"Error al insertar: {str(e)}"})
+                cursor.close()
+                print(f"[DEBUG] Error en inserción: {str(e)}")
+                return jsonify({"success": False, "message": f"Error en inserción: {str(e)}"})
 
+        # --- Actualizar datos ---
+        elif action == "update_data":
+            if not session.get('transaction_active', False):
+                return jsonify({"success": False, "message": "No hay transacción activa"})
+
+            record_id = request.values.get("id")
+            new_name = request.values.get("nombre", "").strip()
+            if not record_id or not new_name:
+                return jsonify({"success": False, "message": "Se requiere ID y nuevo nombre"})
+
+            connection = get_session_connection()
+            cursor = connection.cursor()
+
+            try:
+                # Para SERIALIZABLE, bloquear el registro específico
+                if session.get('isolation_level') == "SERIALIZABLE":
+                    cursor.execute("SELECT * FROM persona WHERE id = %s FOR UPDATE", (record_id,))
+                    cursor.fetchall()  # Consumir todos los resultados
+
+                cursor.execute("UPDATE persona SET nombre = %s WHERE id = %s", (new_name, record_id))
+                cursor.close()
+
+                session['pending_rows'].append({'id': record_id, 'nombre': new_name, 'action': 'UPDATE'})
+                session['inserted_count'] += 1
+                session.modified = True
+
+                return jsonify({"success": True, "updated_id": record_id, "pending": session['pending_rows']})
+
+            except Error as e:
+                cursor.close()
+                print(f"[DEBUG] Error en actualización: {str(e)}")
+                return jsonify({"success": False, "message": f"Error en actualización: {str(e)}"})
+
+        # --- Eliminar datos ---
+        elif action == "delete_data":
+            if not session.get('transaction_active', False):
+                return jsonify({"success": False, "message": "No hay transacción activa"})
+
+            record_id = request.values.get("id")
+            if not record_id:
+                return jsonify({"success": False, "message": "Se requiere ID"})
+
+            connection = get_session_connection()
+            cursor = connection.cursor()
+
+            try:
+                # Para SERIALIZABLE, bloquear el registro antes de eliminarlo
+                if session.get('isolation_level') == "SERIALIZABLE":
+                    cursor.execute("SELECT * FROM persona WHERE id = %s FOR UPDATE", (record_id,))
+                    cursor.fetchall()  # Consumir todos los resultados
+
+                cursor.execute("DELETE FROM persona WHERE id = %s", (record_id,))
+                cursor.close()
+
+                session['pending_rows'].append({'id': record_id, 'nombre': None, 'action': 'DELETE'})
+                session['inserted_count'] += 1
+                session.modified = True
+
+                return jsonify({"success": True, "deleted_id": record_id, "pending": session['pending_rows']})
+
+            except Error as e:
+                cursor.close()
+                print(f"[DEBUG] Error en eliminación: {str(e)}")
+                return jsonify({"success": False, "message": f"Error en eliminación: {str(e)}"})
+
+        # --- Commit ---
         elif action == "commit_transaction":
             if not session.get('transaction_active', False):
                 return jsonify({"success": False, "message": "No hay transacción activa"})
 
             connection = get_session_connection()
-            if not connection or not connection.is_connected():
-                return jsonify({"success": False, "message": "Conexión perdida"})
+            inserted_count = session.get('inserted_count', 0)
+            pending_rows = session.get('pending_rows', [])
 
             try:
-                inserted_count = session.get('inserted_count', 0)
-
-                if inserted_count == 0:
-                    return jsonify({"success": False, "message": "No hay datos para confirmar"})
-
                 connection.commit()
+                print(f"[DEBUG] Transacción confirmada para sesión: {session.get('session_id')}")
+                print(f"[DEBUG] {inserted_count} operaciones confirmadas")
 
                 session['transaction_active'] = False
                 session['inserted_count'] = 0
+                session['pending_rows'] = []
                 session.modified = True
-
-                print(f"[DEBUG] COMMIT REALIZADO! {inserted_count} registros confirmados")
 
                 close_session_connection()
 
-                return jsonify({
-                    "success": True,
-                    "message": f"COMMIT EXITOSO! {inserted_count} persona(s) confirmada(s)",
-                    "committed_count": inserted_count,
-                    "status": "COMMITTED_PERMANENT"
-                })
+                return jsonify({"success": True, "committed_count": inserted_count, "pending": pending_rows})
 
             except Error as e:
-                print(f"[DEBUG] Error en COMMIT: {e}")
-                try:
-                    connection.rollback()
-                    print(f"[DEBUG] Rollback automático por error en commit")
-                except:
-                    pass
+                print(f"[DEBUG] Error en commit: {str(e)}")
                 return jsonify({"success": False, "message": f"Error en commit: {str(e)}"})
 
+        # --- Rollback ---
         elif action == "rollback_transaction":
             if not session.get('transaction_active', False):
                 return jsonify({"success": False, "message": "No hay transacción activa"})
 
             connection = get_session_connection()
-            if not connection:
-                return jsonify({"success": False, "message": "No se pudo obtener la conexión"})
+            inserted_count = session.get('inserted_count', 0)
+            pending_rows = session.get('pending_rows', [])
 
             try:
-                inserted_count = session.get('inserted_count', 0)
-
                 connection.rollback()
+                print(f"[DEBUG] Transacción revertida para sesión: {session.get('session_id')}")
+                print(f"[DEBUG] {inserted_count} operaciones revertidas")
 
                 session['transaction_active'] = False
                 session['inserted_count'] = 0
+                session['pending_rows'] = []
                 session.modified = True
-
-                print(f"[DEBUG] ROLLBACK REALIZADO! {inserted_count} registros eliminados")
 
                 close_session_connection()
 
-                return jsonify({
-                    "success": True,
-                    "message": f"ROLLBACK EXITOSO! {inserted_count} operación(es) cancelada(s)",
-                    "rolled_back_count": inserted_count,
-                    "status": "ROLLED_BACK_DELETED"
-                })
+                return jsonify({"success": True, "rolled_back_count": inserted_count, "pending": pending_rows})
 
             except Error as e:
-                print(f"[DEBUG] Error en ROLLBACK: {e}")
+                print(f"[DEBUG] Error en rollback: {str(e)}")
                 return jsonify({"success": False, "message": f"Error en rollback: {str(e)}"})
 
+        # --- Obtener datos confirmados ---
         elif action == "get_data":
-            print(f"[DEBUG] Obteniendo datos con conexión INDEPENDIENTE")
-
             connection = get_db_connection()
-            if not connection:
-                return jsonify({
-                    "success": False,
-                    "message": "No se pudo conectar a la base de datos",
-                    "data": []
-                })
+            cursor = connection.cursor()
+            cursor.execute("SELECT id, nombre FROM persona ORDER BY id DESC")
+            rows = cursor.fetchall()
+            cursor.close()
+            connection.close()
+            return jsonify({"success": True, "data": rows})
 
-            cursor = None
-            try:
-                cursor = connection.cursor()
-                cursor.execute("SELECT id, nombre FROM persona ORDER BY id DESC")
-                rows = cursor.fetchall()
-
-                print(f"[DEBUG] Encontrados {len(rows)} registros CONFIRMADOS")
-
-                return jsonify({
-                    "success": True,
-                    "data": rows,
-                    "total_records": len(rows)
-                })
-
-            except Error as e:
-                print(f"[DEBUG] Error al obtener datos: {e}")
-                return jsonify({
-                    "success": False,
-                    "message": str(e),
-                    "data": []
-                })
-            finally:
-                if cursor:
-                    cursor.close()
-                if connection and connection.is_connected():
-                    connection.close()
-
-        elif action == "set_isolation":
-            isolation_level = request.values.get("level")
-            if isolation_level not in ISOLATION_LEVELS.values():
-                return jsonify({"success": False, "message": "Nivel de aislamiento no válido"})
-
-            session['isolation_level'] = isolation_level
-            session.modified = True
-
-            close_session_connection()
-
-            return jsonify({
-                "success": True,
-                "message": f"Nivel de aislamiento establecido a {isolation_level}",
-                "current_level": isolation_level
-            })
-
-        elif action == "get_isolation":
-            current_level = session.get('isolation_level', 'REPEATABLE READ')
-            return jsonify({
-                "success": True,
-                "current_level": current_level,
-                "available_levels": list(ISOLATION_LEVELS.values())
-            })
-
-        elif action == "test_dirty_read":
-            # Usar una conexión nueva con READ UNCOMMITTED para detectar lecturas sucias
-            test_conn = get_db_connection('READ UNCOMMITTED')
-            if not test_conn:
-                return jsonify({"success": False, "message": "No se pudo conectar a la base de datos"})
-
-            try:
-                cursor = test_conn.cursor()
-                cursor.execute("SELECT nombre FROM persona WHERE id = %s", (request.values.get("id"),))
-                result = cursor.fetchone()
-
-                # Obtener el estado real del dato (si está confirmado o no)
-                confirmed_conn = get_db_connection()
-                confirmed_cursor = confirmed_conn.cursor()
-                confirmed_cursor.execute("SELECT nombre FROM persona WHERE id = %s", (request.values.get("id"),))
-                confirmed_result = confirmed_cursor.fetchone()
-
-                is_dirty = result != confirmed_result
-
-                cursor.close()
-                confirmed_cursor.close()
-                test_conn.close()
-                confirmed_conn.close()
-
-                return jsonify({
-                    "success": True,
-                    "data": result[0] if result else None,
-                    "is_dirty": is_dirty,
-                    "confirmed_data": confirmed_result[0] if confirmed_result else None,
-                    "note": "Lectura sucia detectada" if is_dirty else "Datos consistentes"
-                })
-            except Error as e:
-                return jsonify({"success": False, "message": str(e)})
-            finally:
-                if 'cursor' in locals(): cursor.close()
-                if 'confirmed_cursor' in locals(): confirmed_cursor.close()
-                if 'test_conn' in locals() and test_conn.is_connected(): test_conn.close()
-                if 'confirmed_conn' in locals() and confirmed_conn.is_connected(): confirmed_conn.close()
-
-        elif action == "test_non_repeatable_read":
-            connection = get_session_connection()
-            if not connection:
-                return jsonify({"success": False, "message": "No hay conexión"})
-
-            try:
-                cursor = connection.cursor()
-
-                # Primera lectura
-                cursor.execute("SELECT nombre FROM persona WHERE id = %s", (request.values.get("id"),))
-                first_read = cursor.fetchone()
-
-                # Esperar un momento para que otro proceso pueda modificar el dato
-                time.sleep(2)
-
-                # Segunda lectura
-                cursor.execute("SELECT nombre FROM persona WHERE id = %s", (request.values.get("id"),))
-                second_read = cursor.fetchone()
-
-                is_different = first_read != second_read
-
-                cursor.close()
-
-                return jsonify({
-                    "success": True,
-                    "first_read": first_read[0] if first_read else None,
-                    "second_read": second_read[0] if second_read else None,
-                    "is_different": is_different,
-                    "note": "Lectura no repetible detectada" if is_different else "Lecturas consistentes"
-                })
-            except Error as e:
-                return jsonify({"success": False, "message": str(e)})
-
-        elif action == "test_phantom_read":
-            connection = get_session_connection()
-            if not connection:
-                return jsonify({"success": False, "message": "No hay conexión"})
-
-            try:
-                cursor = connection.cursor()
-
-                # Primera lectura
-                cursor.execute("SELECT COUNT(*) FROM persona WHERE nombre LIKE %s",
-                               ('%' + request.values.get("filter", "") + '%',))
-                first_count = cursor.fetchone()[0]
-
-                # Esperar un momento para que otro proceso pueda insertar datos
-                time.sleep(2)
-
-                # Segunda lectura
-                cursor.execute("SELECT COUNT(*) FROM persona WHERE nombre LIKE %s",
-                               ('%' + request.values.get("filter", "") + '%',))
-                second_count = cursor.fetchone()[0]
-
-                has_phantoms = first_count != second_count
-
-                cursor.close()
-
-                return jsonify({
-                    "success": True,
-                    "first_count": first_count,
-                    "second_count": second_count,
-                    "has_phantoms": has_phantoms,
-                    "note": "Lectura fantasma detectada" if has_phantoms else "No se detectaron lecturas fantasma"
-                })
-            except Error as e:
-                return jsonify({"success": False, "message": str(e)})
+        # --- Obtener cambios pendientes ---
+        elif action == "get_pending":
+            pending_rows = session.get('pending_rows', [])
+            return jsonify({"success": True, "data": pending_rows})
 
         return jsonify({"success": False, "message": "Acción no válida"})
 
     except Exception as e:
-        print(f"[DEBUG] Error inesperado: {e}")
+        print(f"[DEBUG] Error inesperado: {str(e)}")
         return jsonify({"success": False, "message": f"Error inesperado: {str(e)}"})
 
 
@@ -482,8 +361,7 @@ def close_db(error):
 
 if __name__ == "__main__":
     try:
-        print("Iniciando servidor Flask con TRANSACCIONES REALES de MySQL")
-        app.run(debug=True)
+        app.run(debug=True, threaded=True)  # Habilitamos threading para concurrencia
     finally:
         with connections_lock:
             for session_id, conn_info in connections.items():
